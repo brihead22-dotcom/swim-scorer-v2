@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Swim Scorecard Final</title>
+    <style>
+        :root {
+            --primary-bg: #f4f7f9;
+            --secondary-bg: #ffffff;
+            --text-color: #1a1a1a;
+            --primary-accent: #007aff;
+            --border-color: #e0e0e0;
+            --edit-color: #ff9500;
+            --error-color: #ff3b30;
+            --exhibition-bg: #e9ecef;
+            --exhibition-color: #6c757d;
+            --dq-color: #6a0dad;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--primary-bg); margin: 0; padding: 0; color: var(--text-color); overscroll-behavior-y: contain;
+        }
+        .container { max-width: 450px; margin: 0 auto; background-color: var(--secondary-bg); min-height: 100vh; }
+        .score-header {
+            position: sticky; top: 0; background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            padding: 10px 15px; border-bottom: 1px solid var(--border-color); z-index: 100;
+        }
+        .score-display { display: flex; justify-content: space-around; text-align: center; }
+        .team-score h2 { margin: 0 0 5px 0; font-size: 1em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .team-score .score { font-size: 2.5em; font-weight: 700; line-height: 1; }
+        .header-actions { text-align: center; margin-top: 10px; }
+        #export-pdf-btn { background: none; border: 1px solid var(--primary-accent); color: var(--primary-accent); border-radius: 8px; padding: 5px 12px; font-size: 0.8em; cursor: pointer; }
+        main { padding: 15px; }
+        .event-card { background-color: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 15px; padding: 15px; }
+        .event-card.locked { background-color: #f9f9f9; }
+        .event-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px; }
+        .event-header h3 { margin: 0; font-size: 1.1em; }
+        .event-header .points { font-size: 0.9em; color: #888; }
+        .event-scoring { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .place-input { text-align: center; }
+        .place-input label { display: block; font-size: 1em; margin-bottom: 2px; color: #333; font-weight: bold; }
+        .place-input .place-points { font-size: 0.7em; font-weight: bold; color: var(--primary-accent); display: block; height: 1em; margin-bottom: 3px; }
+        .place-input input { width: 100%; padding: 10px 0; font-size: 1.2em; text-align: center; border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box; transition: background-color 0.2s, border-color 0.2s, color 0.2s; }
+        .place-input .team-name-display { font-size: 0.7em; color: #555; display: block; height: 1em; margin-top: 2px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+        .place-input input.error-input { border-color: var(--error-color); background-color: #fff0f0; }
+        .place-input input.exhibition-input { background-color: var(--exhibition-bg); color: var(--exhibition-color); border-style: dashed; }
+        .place-input input.dq-input { color: var(--dq-color); font-weight: bold; }
+        .place-input .result-display { font-size: 1.2em; font-weight: 600; padding: 8px 0; line-height: 1.2; }
+        .place-input .result-display.dq-display .lane-number { color: var(--dq-color); }
+        .place-input .result-display .team-name { font-size: 0.7em; font-weight: 500; color: #555; }
+        .action-button { width: 100%; padding: 12px; font-size: 1em; font-weight: 600; border-radius: 8px; border: none; color: white; cursor: pointer; margin-top: 15px; }
+        .save-btn { background-color: var(--primary-accent); }
+        .edit-btn { background-color: var(--edit-color); }
+        #config-screen{position:fixed;top:0;left:0;right:0;bottom:0;background-color:rgba(0,0,0,0.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:15px}
+        .config-modal{background-color:#fff;padding:20px;border-radius:15px;width:100%;max-width:400px}
+        .config-modal h2{margin-top:0;text-align:center}
+        .config-modal .form-group{margin-bottom:15px}
+        .config-modal label{display:block;margin-bottom:5px;font-weight:500}
+        .config-modal input[type=text]{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-color);box-sizing:border-box}
+        .lane-toggle{display:flex;border:1px solid var(--border-color);border-radius:8px;overflow:hidden}
+        .lane-toggle button{flex:1;padding:10px;border:none;background:#f0f0f0;cursor:pointer}
+        .lane-toggle button.active{background-color:var(--primary-accent);color:#fff;font-weight:600}
+        .exhibition-lanes{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+        .exhibition-lanes label{display:flex;align-items:center;gap:5px}
+        #keypad{position:fixed;bottom:0;left:0;right:0;background-color:#d1d5db;padding:5px;display:none;flex-direction:column;z-index:300;max-width:450px;margin:0 auto}
+        #keypad.visible{display:flex}
+        #keypad-display{background-color:#fff;text-align:right;padding:10px;font-size:1.5em;margin:5px;border-radius:8px;min-height:1.5em}
+        #keypad .keypad-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:5px}
+        #keypad button{padding:15px;font-size:1.5em;border:none;border-radius:8px;background-color:#fff;box-shadow:0 1px 1px rgba(0,0,0,0.2);cursor:pointer}
+        #keypad button:active{background-color:#c0c0c0}
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="config-screen">
+            <div class="config-modal">
+                <h2>Configure Meet</h2>
+                <div class="form-group"><label for="home-team-name">Home Team</label><input type="text" id="home-team-name" value="HOME"></div>
+                <div class="form-group"><label for="visitor-team-name">Visitor Team</label><input type="text" id="visitor-team-name" value="VISITOR"></div>
+                <div class="form-group"><label>Home Team Lanes</label><div class="lane-toggle" id="lane-assignment"><button class="active" data-value="odd">Odd</button><button data-value="even">Even</button></div></div>
+                <div class="form-group"><label>Exhibition Lanes</label><div class="exhibition-lanes" id="exhibition-lanes-config"></div></div>
+                <button id="start-scoring-btn" class="action-button save-btn">Start Scoring</button>
+            </div>
+        </div>
+        <header class="score-header">
+            <div class="score-display">
+                <div class="team-score"><h2 id="home-team-label">Home</h2><div class="score" id="home-score">0</div></div>
+                <div class="team-score"><h2 id="visitor-team-label">Visitor</h2><div class="score" id="visitor-score">0</div></div>
+            </div>
+            <div class="header-actions"><button id="export-pdf-btn">Export PDF</button></div>
+        </header>
+        <main id="events-container"></main>
+    </div>
+    <div id="keypad">
+        <div id="keypad-display"></div>
+        <div class="keypad-grid">
+            <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+            <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+            <button data-key="7">7</button><button data-key="8">8</button><button data-key="/">/</button>
+            <button data-key="*">*</button><button data-key="del">Del</button>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        let meetConfig = {};
+        let eventScores = {};
+        const configScreen = document.getElementById('config-screen');
+        const homeScoreDisplay = document.getElementById('home-score');
+        const visitorScoreDisplay = document.getElementById('visitor-score');
+        const eventsContainer = document.getElementById('events-container');
+        const keypad = document.getElementById('keypad');
+        const keypadDisplay = document.getElementById('keypad-display');
+        let activeInputField = null;
+        
+        const events = [
+            { id: 'medley-relay', name: '200 Medley Relay', type: 'relay', places: 8, scores: [8, 4, 2], points: 14 },
+            { id: '200-free', name: '200 Free', type: 'individual', places: 8, scores: [6, 4, 3, 2, 1], points: 28 },
+            { id: '200-im', name: '200 IM', type: 'individual', places: 8, scores: [6, 4, 3, 2, 1], points: 42 },
+            { id: '50-free', name: '50 Free', type: 'individual', places: 8, scores: [6, 4, 3, 2, 1], points: 56 },
+            { id: 'diving', name: 'Diving', type: 'diving', places: 8, scores: [6, 4, 3, 2, 1], points: 70 },
+            { id: '100-fly', name: '100 Butterfly', type: 'individual', places: 8, scores: [6, 4, 3, 2, 1], points: 84 },
+            { id: '100-free', name: '100 Free', type: 'individual', places: 8, scores: [6, 4, 3, 2, 1], points: 98 },
+            { id: '500-free', name: '500 Free', type: 'individual', places: 8, scores: [6, 4, 3, 2, 1], points: 112 },
+            { id: '200-free-relay', name: '200 Free Relay', type: 'relay', places: 8, scores: [8, 4, 2], points: 126 },
+            { id: '100-back', name: '100 Backstroke', type: 'individual', places: 8, scores: [6, 4, 3, 2, 1], points: 154 },
+            { id: '100-breast', name: '100 Breaststroke', type: 'individual', places: 8, scores: [6, 4, 3, 2, 1], points: 170 },
+            { id: '400-free-relay', name: '400 Free Relay', type: 'relay', places: 8, scores: [8, 4, 2], points: 186 }
+        ];
+
+        function init() {
+            const exhibitionContainer = document.getElementById('exhibition-lanes-config');
+            for (let i = 1; i <= 8; i++) exhibitionContainer.innerHTML += `<label><input type="checkbox" value="${i}"> L${i}</label>`;
+            events.forEach(renderEventCard);
+            setupListeners();
+        }
+
+        function renderEventCard(event) {
+            const card = document.createElement('div');
+            card.className = 'event-card'; card.id = `event-${event.id}`; card.dataset.eventId = event.id;
+            let scoringHtml = `<div class="event-scoring">`;
+            for (let i = 1; i <= event.places; i++) {
+                scoringHtml += `<div class="place-input" data-place-rank="${i}"><label>${ordinal(i)}</label><span class="place-points">&nbsp;</span><input type="text" readonly class="lane-input"><span class="team-name-display">&nbsp;</span><div class="result-display" style="display:none;"></div></div>`;
+            }
+            scoringHtml += `</div>`;
+            card.innerHTML = `<div class="event-header"><h3>${event.name}</h3><span class="points">Points: ${event.points}</span></div>${scoringHtml}<button class="action-button save-btn">Save Event</button>`;
+            eventsContainer.appendChild(card);
+        }
+
+        function setupListeners() {
+            document.getElementById('start-scoring-btn').addEventListener('click', applyConfig);
+            eventsContainer.addEventListener('click', handleEventCardClick);
+            keypad.addEventListener('click', handleKeypadClick);
+            document.addEventListener('click', (e) => { if (!keypad.contains(e.target) && !e.target.classList.contains('lane-input')) closeKeypad(); });
+        }
+
+        function applyConfig() {
+            meetConfig.homeTeam = document.getElementById('home-team-name').value || 'HOME';
+            meetConfig.visitorTeam = document.getElementById('visitor-team-name').value || 'VISITOR';
+            meetConfig.homeLanes = document.querySelector('#lane-assignment .active').dataset.value;
+            meetConfig.exhibitionLanes = Array.from(document.querySelectorAll('#exhibition-lanes-config input:checked')).map(cb => parseInt(cb.value));
+            document.getElementById('home-team-label').textContent = meetConfig.homeTeam;
+            document.getElementById('visitor-team-label').textContent = meetConfig.visitorTeam;
+            configScreen.style.display = 'none';
+        }
+
+        function handleEventCardClick(e) {
+            const target = e.target;
+            if (target.classList.contains('save-btn')) saveEvent(target.closest('.event-card'));
+            else if (target.classList.contains('edit-btn')) editEvent(target.closest('.event-card'));
+            else if (target.classList.contains('lane-input')) openKeypad(target);
+        }
+
+        function handleKeypadClick(e) {
+            if (e.target.tagName !== 'BUTTON' || !activeInputField) return;
+            const key = e.target.dataset.key;
+            let currentValue = activeInputField.value;
+            let advance = false;
+
+            if (key === 'del') {
+                currentValue = currentValue.trim().slice(0, -1).trim();
+            } else if (key === '/') {
+                if (!currentValue.includes('/') && currentValue.length > 0 && currentValue.length < 3) {
+                    currentValue += ' / ';
+                }
+            } else if (!isNaN(parseInt(key))) { // If the key is a number
+                if (currentValue.includes('/')) {
+                     if(currentValue.length < 7) currentValue += key;
+                } else {
+                    currentValue = key;
+                    advance = true;
+                }
+            } else if (key === '*') { // Handle DQ
+                if (currentValue.length > 0 && !currentValue.includes('*')) {
+                     currentValue += '*';
+                }
+            }
+            
+            activeInputField.value = currentValue;
+            keypadDisplay.textContent = currentValue;
+            validateAndStyle(activeInputField.closest('.event-card'));
+
+            if (advance) {
+                const inputs = Array.from(activeInputField.closest('.event-scoring').querySelectorAll('.lane-input'));
+                const currentIndex = inputs.indexOf(activeInputField);
+                const nextVisibleInput = inputs.slice(currentIndex + 1).find(input => input.closest('.place-input').style.display !== 'none');
+                if (nextVisibleInput) {
+                    setTimeout(() => openKeypad(nextVisibleInput), 100);
+                } else {
+                    setTimeout(closeKeypad, 100);
+                }
+            }
+        }
+        
+        function getPointEarners(eventData, placesArray) {
+            const pointEarners = new Map();
+            let scoreIndex = 0;
+            
+            for (let i = 0; i < placesArray.length; i++) {
+                if (scoreIndex >= eventData.scores.length) break;
+
+                const placeFinishers = placesArray[i].filter(laneStr => {
+                    const lane = parseInt(laneStr);
+                    return laneStr && !laneStr.includes('*') && !meetConfig.exhibitionLanes.includes(lane);
+                });
+
+                if (placeFinishers.length > 0) {
+                    const pointsForPlace = eventData.scores.slice(scoreIndex, scoreIndex + placeFinishers.length);
+                    const totalPoints = pointsForPlace.reduce((sum, p) => sum + p, 0);
+                    const individualPoints = totalPoints / placeFinishers.length;
+
+                    placeFinishers.forEach(laneStr => {
+                        pointEarners.set(parseInt(laneStr), individualPoints);
+                    });
+                    
+                    if (eventData.type === 'relay') {
+                         const firstPlaceFinishers = placesArray[0].filter(l => !l.includes('*') && !meetConfig.exhibitionLanes.includes(parseInt(l)));
+                         const secondPlaceFinishers = placesArray[1].filter(l => !l.includes('*') && !meetConfig.exhibitionLanes.includes(parseInt(l)));
+
+                         if (firstPlaceFinishers.length > 0 && secondPlaceFinishers.length > 0) {
+                            const firstPlaceTeam = getTeamForLane(parseInt(firstPlaceFinishers[0]));
+                            const secondPlaceTeam = getTeamForLane(parseInt(secondPlaceFinishers[0]));
+
+                            if (firstPlaceTeam && firstPlaceTeam === secondPlaceTeam) {
+                                const thirdPlaceFinishers = placesArray[2].filter(l => !l.includes('*') && !meetConfig.exhibitionLanes.includes(parseInt(l)));
+                                if (thirdPlaceFinishers.length > 0 && getTeamForLane(parseInt(thirdPlaceFinishers[0])) === firstPlaceTeam) {
+                                    pointEarners.delete(parseInt(thirdPlaceFinishers[0]));
+                                    
+                                    const otherTeam = firstPlaceTeam === 'home' ? 'visitor' : 'home';
+                                    for (let j = 3; j < placesArray.length; j++) {
+                                        const nextFinishers = placesArray[j].filter(l => !l.includes('*') && !meetConfig.exhibitionLanes.includes(parseInt(l)));
+                                        if (nextFinishers.length > 0 && getTeamForLane(parseInt(nextFinishers[0])) === otherTeam) {
+                                            pointEarners.set(parseInt(nextFinishers[0]), eventData.scores[2]);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                         }
+                    }
+                    scoreIndex += placeFinishers.length;
+                }
+            }
+            return pointEarners;
+        }
+
+        function validateAndStyle(card) {
+            const eventId = card.dataset.eventId;
+            const eventData = events.find(e => e.id === eventId);
+            const placesData = getPlacesData(card);
+            const allLanes = placesData.flat().map(l => l.replace('*', ''));
+            const duplicates = allLanes.filter((item, index) => allLanes.indexOf(item) !== index);
+            
+            const pointEarners = getPointEarners(eventData, placesData);
+            
+            let occupiedPlaces = 0;
+            card.querySelectorAll('.place-input').forEach((placeDiv, i) => {
+                const placeRank = i + 1;
+                if (occupiedPlaces >= placeRank) {
+                    placeDiv.style.display = 'none';
+                } else {
+                    placeDiv.style.display = 'block';
+                }
+
+                const lanesInPlace = placesData[i];
+                occupiedPlaces = placeRank + (lanesInPlace.length > 1 ? lanesInPlace.length - 1 : 0);
+
+                const input = placeDiv.querySelector('.lane-input');
+                const teamSpan = placeDiv.querySelector('.team-name-display');
+                const laneStr = input.value;
+                const laneNums = lanesInPlace.map(l => parseInt(l));
+
+                const points = pointEarners.get(laneNums[0]);
+                if (points) { placeDiv.querySelector('.place-points').textContent = `${points} pts`; } 
+                else { placeDiv.querySelector('.place-points').innerHTML = '&nbsp;'; }
+                
+                const isDQ = laneStr && laneStr.includes('*');
+                const isExhibition = laneNums.some(ln => meetConfig.exhibitionLanes.includes(ln));
+                const isDuplicate = lanesInPlace.some(l => duplicates.includes(l.replace('*',''))) && laneStr;
+                input.classList.toggle('exhibition-input', isExhibition && !isDQ);
+                input.classList.toggle('dq-input', isDQ);
+                input.classList.toggle('error-input', isDuplicate && !isDQ);
+                
+                if(lanesInPlace.length > 0) {
+                    teamSpan.textContent = lanesInPlace.map(lane => {
+                        const team = getTeamForLane(parseInt(lane));
+                        return team === 'home' ? meetConfig.homeTeam.substring(0,4) : meetConfig.visitorTeam.substring(0,4);
+                    }).join(' / ');
+                } else {
+                    teamSpan.innerHTML = '&nbsp;';
+                }
+            });
+        }
+        
+        function getPlacesData(card) {
+             return Array.from(card.querySelectorAll('.place-input')).map(placeDiv => {
+                const value = placeDiv.querySelector('.lane-input').value;
+                return value.split('/').map(s => s.trim()).filter(Boolean);
+             });
+        }
+
+        function getTeamForLane(lane) {
+            if(!lane) return null;
+            const isLaneOdd = lane % 2 !== 0;
+            return (meetConfig.homeLanes === 'odd' && isLaneOdd) || (meetConfig.homeLanes === 'even' && !isLaneOdd) ? 'home' : 'visitor';
+        }
+
+        function calculateEventScore(eventData, placesArray) {
+            const pointEarners = getPointEarners(eventData, placesArray);
+            let homePoints = 0, visitorPoints = 0;
+            for (const [lane, points] of pointEarners.entries()) {
+                if(getTeamForLane(lane) === 'home') { homePoints += points; } else { visitorPoints += points; }
+            }
+            return { home: homePoints, visitor: visitorPoints };
+        }
+        
+        function saveEvent(card) {
+            if(card.querySelector('.error-input')) { alert('Cannot save with duplicate lanes.'); return; }
+            const eventId = card.dataset.eventId;
+            eventScores[eventId] = calculateEventScore(events.find(e => e.id === eventId), getPlacesData(card));
+            updateRunningTotal();
+            lockCard(card);
+        }
+
+        function editEvent(card) {
+            delete eventScores[card.dataset.eventId];
+            updateRunningTotal();
+            unlockCard(card);
+        }
+
+        function updateRunningTotal() {
+            let tH = 0, tV = 0;
+            Object.values(eventScores).forEach(s => { tH += s.home; tV += s.visitor; });
+            homeScoreDisplay.textContent = tH;
+            visitorScoreDisplay.textContent = tV;
+        }
+
+        function lockCard(card) {
+            card.querySelectorAll('.place-input').forEach(div => {
+                const input = div.querySelector('input');
+                const teamSpan = div.querySelector('.team-name-display');
+                const resultDisplay = div.querySelector('.result-display');
+                const laneText = input.value || '-';
+                const teamText = teamSpan.textContent.trim() ? `<span class="team-name">${teamSpan.textContent}</span>` : '';
+                resultDisplay.innerHTML = `<span class="lane-number">${laneText}</span><br>${teamText}`;
+                resultDisplay.style.display = 'block'; input.style.display = 'none'; teamSpan.style.display = 'none';
+                resultDisplay.classList.toggle('dq-display', input.value.includes('*'));
+                if (input.classList.contains('exhibition-input')) resultDisplay.style.color = 'var(--exhibition-color)';
+                else resultDisplay.style.color = '';
+            });
+            card.classList.add('locked');
+            const btn = card.querySelector('button');
+            btn.textContent = 'Edit'; btn.classList.remove('save-btn'); btn.classList.add('edit-btn');
+        }
+
+        function unlockCard(card) {
+            card.querySelectorAll('.place-input').forEach(div => {
+                div.style.display = 'block';
+                const input = div.querySelector('input');
+                div.querySelector('.result-display').style.display = 'none';
+                input.style.display = 'block';
+                div.querySelector('.team-name-display').style.display = 'block';
+                input.classList.remove('error-input');
+            });
+            card.classList.remove('locked');
+            const btn = card.querySelector('button');
+            btn.textContent = 'Save Event'; btn.classList.remove('edit-btn'); btn.classList.add('save-btn');
+            validateAndStyle(card);
+        }
+        
+        function openKeypad(inputElement) {
+            activeInputField = inputElement;
+            keypadDisplay.textContent = activeInputField.value;
+            keypad.classList.add('visible');
+            setTimeout(() => {
+                activeInputField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 250);
+        }
+        function closeKeypad() { activeInputField = null; keypad.classList.remove('visible'); }
+
+        function ordinal(i) {
+            const j = i % 10, k = i % 100;
+            if (j == 1 && k != 11) return i + "st";
+            if (j == 2 && k != 12) return i + "nd";
+            if (j == 3 && k != 13) return i + "rd";
+            return i + "th";
+        }
+        
+        init();
+    });
+    </script>
+</body>
+</html>
